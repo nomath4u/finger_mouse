@@ -135,10 +135,16 @@ struct mouse_pair calc_xy(struct orientation dat){
   struct mouse_pair mp = {0,0};
   static float prev_yaw;
   static float prev_pitch;
-  mp.x = dat.yaw - prev_yaw;
-  mp.y = -1 * (dat.pitch - prev_pitch);
+  float tempx, tempy;
+  tempx = dat.yaw - prev_yaw;
+  tempy= -1 * (dat.pitch - prev_pitch);
   prev_yaw = dat.yaw;
   prev_pitch = dat.pitch;
+
+  #define SENSITIVITY 30.0
+  mp.x = tempx * SENSITIVITY;
+  mp.y = tempy * SENSITIVITY;
+  Serial.println(mp.x);
   return mp;
 }
 
