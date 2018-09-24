@@ -6,6 +6,12 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "Wire.h"
 #include "Adafruit_MPR121.h"
+#include "Adafruit_BLE.h"
+#include "Adafruit_BluefruitLE_SPI.h"
+#include "Adafruit_BluefruitLE_UART.h"
+
+#include "BluefruitConfig.h"
+
 /* IDEAS
  *  Use the IRQ on the capacitive sensor in order to wake up the arduino.
  *  Make sure the bluetooth connection stays alive.
@@ -13,17 +19,14 @@
  */
 
 
-/* with default values the accelerometer range is  +- 2g and += 250 deg/second
- *  leaving us with 
- *  16384 per g
- *  131 deg/s
- */
 #define VAL_TO_G 16384
 #define VAL_TO_DEG 131
 #define G_TO_MSS 9.8
 #define US_TO_S 1000000
 #define INDEX_PAD 1 //Not sure what this is going to be yet
 #define TRUE 1
+#define FACTORYRESET_ENABLE         0
+#define MINIMUM_FIRMWARE_VERSION    "0.6.6"
 
 struct mouse_pair{
   int x;
@@ -43,6 +46,8 @@ bool on_tick(void);
 bool pinched(void);
 void set_offsets(void);
 void set_starting_angles(void);
+void error(const __FlashStringHelper*err);
+void setup_ble(void);
 //void get_angles(struct accel_data, double*, double*, double);
 MPU6050 mpu;
 Adafruit_MPR121 cap = Adafruit_MPR121();
@@ -61,6 +66,11 @@ VectorFloat gravity;
 VectorInt16 gyro;
 bool been_pinched;
 uint32_t timer;
+
+Adafruit_BluefruitLE_SPI ble(BLUEFRUIT_SPI_CS, BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_RST);
+
+
+
 void setup() {
   uint8_t dev_status;
   dmp_ready = 0; //Assume failure
@@ -72,6 +82,7 @@ void setup() {
   Serial.println("Setup complete");
   /* Setup for MPU6050, hopefully it doesn't interfere with the capacitive sensor */
   Wire.begin();
+  setup_ble();
   /* Calculate and set gyro/acceleromter offsets */
   mpu.initialize(); // Sets gyro to GYRO_FS_250 and accel to ACCEL_FS_2 (250deg/s and 2g)
   dev_status = mpu.dmpInitialize(); //Begin dmp programming
@@ -144,14 +155,26 @@ struct mouse_pair calc_xy(struct orientation dat){
   #define SENSITIVITY 30.0
   mp.x = tempx * SENSITIVITY;
   mp.y = tempy * SENSITIVITY;
-  Serial.println(mp.x);
+  //Serial.println(mp.x);
   return mp;
 }
 
 // This function assumes th/at the state of the mouse begin and end are handled already
 void send_mouse_event(struct mouse_pair mp){
-  Mouse.move(mp.x,mp.y);
-  return;
+  //Mouse.move(mp.x,mp.y);
+  // Mouse moves according to the user's input
+    ble.print(F("AT+BleHidMouseMove="));
+    ble.print(mp.x);ble.print(",");ble.println(mp.y);
+
+    if( ble.waitForOK() )
+    {
+      Serial.println( F("OK!") );
+    }else
+    {
+      Serial.println( F("FAILED!") );
+    }
+
+
 }
 
 /* Only returns true if the index finger is pinched */
@@ -183,4 +206,48 @@ void set_offsets(){
   mpu.setZGyroOffset(-47);
 }
 
+void error(const __FlashStringHelper*err) {
+  Serial.println(err);
+  while (1);
+}
+
+void setup_ble(void){
+  if ( !ble.begin(VERBOSE_MODE) )
+  {
+    error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
+  }
+  Serial.println( F("OK!") );
+
+  if ( FACTORYRESET_ENABLE )
+  {
+    /* Perform a factory reset to make sure everything is in a known state */
+    Serial.println(F("Performing a factory reset: "));
+    if ( ! ble.factoryReset() ){
+      error(F("Couldn't factory reset"));
+    }
+  }
+
+  /* Disable command echo from Bluefruit */
+  ble.echo(false);
+
+  Serial.println("Requesting Bluefruit info:");
+  /* Print Bluefruit information */
+  ble.info();
+
+  // This demo only available for firmware from 0.6.6
+  if ( !ble.isVersionAtLeast(MINIMUM_FIRMWARE_VERSION) )
+  {
+    error(F("This sketch requires firmware version " MINIMUM_FIRMWARE_VERSION " or higher!"));
+  }
+  Serial.println(F("Enable HID Service (including Mouse): "));
+  if (! ble.sendCommandCheckOK(F( "AT+BleHIDEn=On"  ))) {
+    error(F("Failed to enable HID (firmware >=0.6.6?)"));
+  }
+
+  /* Add or remove service requires a reset */
+  Serial.println(F("Performing a SW reset (service changes require a reset): "));
+  if (! ble.reset() ) {
+    error(F("Could not reset??"));
+  }
+}
 
