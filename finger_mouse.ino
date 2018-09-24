@@ -75,7 +75,7 @@ void setup() {
   uint8_t dev_status;
   dmp_ready = 0; //Assume failure
   been_pinched = 0;
-  Serial.begin(9600);
+  //Serial.begin(9600);
   
   //pinMode(INDEX_PAD, INPUT);
   cap.begin(0x5A);
@@ -107,11 +107,15 @@ void loop() {
   int y;
   struct orientation adat;
   struct mouse_pair mp;
+  static unsigned timer = 0;
   adat = read_acc();
   if(pinched() && dmp_ready){
         adat = read_acc();
         mp = calc_xy(adat);
-        send_mouse_event(mp);
+        //if(millis() - timer > 50){ // Make sure we only send this ever 100 ms
+          send_mouse_event(mp);
+        //  timer = millis();
+        //}
         been_pinched = 1;
   } else { been_pinched = 0; }
   //delay(10);
@@ -166,13 +170,10 @@ void send_mouse_event(struct mouse_pair mp){
     ble.print(F("AT+BleHidMouseMove="));
     ble.print(mp.x);ble.print(",");ble.println(mp.y);
 
-    if( ble.waitForOK() )
-    {
-      Serial.println( F("OK!") );
-    }else
-    {
-      Serial.println( F("FAILED!") );
-    }
+    //if( !ble.waitForOK() )
+    //{
+    //  Serial.println( F("FAILED!") );
+    //}
 
 
 }
