@@ -1,3 +1,5 @@
+#include <CapacitiveSensor.h>
+
 #include <Kalman.h>
 
 #include <Mouse.h>
@@ -5,7 +7,7 @@
 //#include "MPU6050.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 #include "Wire.h"
-#include "Adafruit_MPR121.h"
+//#include "Adafruit_MPR121.h"
 #include "Adafruit_BLE.h"
 #include "Adafruit_BluefruitLE_SPI.h"
 #include "Adafruit_BluefruitLE_UART.h"
@@ -15,7 +17,6 @@
 /* IDEAS
  *  Use the IRQ on the capacitive sensor in order to wake up the arduino.
  *  Make sure the bluetooth connection stays alive.
- *  project the filter onto the plane with gravity so roll doesn't matter
  */
 
 
@@ -27,7 +28,7 @@
 #define TRUE 1
 #define FACTORYRESET_ENABLE         0
 #define MINIMUM_FIRMWARE_VERSION    "0.6.6"
-
+ //Trying to be like 1/2at^2 constant must always be negative but can be varied for sensitivity
 struct mouse_pair{
   int x;
   int y;
@@ -48,9 +49,9 @@ void set_offsets(void);
 void set_starting_angles(void);
 void error(const __FlashStringHelper*err);
 void setup_ble(void);
-//void get_angles(struct accel_data, double*, double*, double);
+struct mouse_pair mouse_glide(struct mouse_pair);
+
 MPU6050 mpu;
-Adafruit_MPR121 cap = Adafruit_MPR121();
 Kalman kalmanX;
 Kalman kalmanY;
 
@@ -68,7 +69,7 @@ bool been_pinched;
 uint32_t timer;
 
 Adafruit_BluefruitLE_SPI ble(BLUEFRUIT_SPI_CS, BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_RST);
-
+CapacitiveSensor cap(12,11);
 
 
 void setup() {
@@ -76,9 +77,9 @@ void setup() {
   dmp_ready = 0; //Assume failure
   been_pinched = 0;
   //Serial.begin(9600);
-  
-  //pinMode(INDEX_PAD, INPUT);
-  cap.begin(0x5A);
+  pinMode(12,OUTPUT);
+  pinMode(11, INPUT);
+  cap = CapacitiveSensor(11,12); 
   Serial.println("Setup complete");
   /* Setup for MPU6050, hopefully it doesn't interfere with the capacitive sensor */
   Wire.begin();
@@ -106,19 +107,18 @@ void loop() {
   int x;
   int y;
   struct orientation adat;
-  struct mouse_pair mp;
+  static struct mouse_pair mp;
   static unsigned timer = 0;
   adat = read_acc();
   if(pinched() && dmp_ready){
         adat = read_acc();
         mp = calc_xy(adat);
-        //if(millis() - timer > 50){ // Make sure we only send this ever 100 ms
-          send_mouse_event(mp);
-        //  timer = millis();
-        //}
+        send_mouse_event(mp);
         been_pinched = 1;
-  } else { been_pinched = 0; }
-  //delay(10);
+  } else {
+        //mp = mouse_glide(mp); //Not working well at the moment
+	been_pinched = 0;
+  }
 }
 
 /* accel is in gs and gyro is in degrees/sec */
@@ -186,10 +186,15 @@ bool first_pinched(uint8_t fingers){
 }
 
 uint8_t cap_sensor_read(){
-  //return (1<<0); //Faked until can actually read the capacitative sensor
-  //Serial.println(cap.touched());
-  return cap.touched();
+  long v = cap.capacitiveSensor(80); //Sensor resolution probably need to mess with this
+  Serial.println(v);
+  if( v > 100 ) { //Arbitrary number
+    return ( 1 << 0 );
+  }
+  delay(100);
+  return (0);
 }
+
 
 bool pinched(){
   uint8_t fingers = cap_sensor_read();
@@ -252,3 +257,24 @@ void setup_ble(void){
   }
 }
 
+/* This should only be called when not pressed, otherwise we are going to move a lot */
+struct mouse_pair mouse_glide(struct mouse_pair mp){
+	#define FRICTION ( (-0.07) * pow( ticks, 2) )
+	/* Should die off exponentially */
+        struct mouse_pair glide_vals;
+	static unsigned ticks = 0;
+	if(mp.x > 0){
+		glide_vals.x = mp.x + FRICTION;
+	} else {
+		glide_vals.x = mp.x - FRICTION;
+	}
+
+	if(mp.y > 0){
+		glide_vals.y = mp.y + FRICTION;
+	} else {
+		glide_vals.y = mp.y - FRICTION;
+	}
+	send_mouse_event(glide_vals);
+        ticks++;
+        return glide_vals;
+}
