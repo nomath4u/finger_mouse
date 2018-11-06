@@ -22,10 +22,11 @@
 #define VAL_TO_DEG 131
 #define G_TO_MSS 9.8
 #define US_TO_S 1000000
-#define INDEX_PAD 1 //Not sure what this is going to be yet
+#define INDEX_PAD 0 //Not sure what this is going to be yet
 #define TRUE 1
 #define FACTORYRESET_ENABLE         0
 #define MINIMUM_FIRMWARE_VERSION    "0.6.6"
+#define CAP_SENSE 12 //Chosen for battery usage. When grounded to mains this is not a good value
  //Trying to be like 1/2at^2 constant must always be negative but can be varied for sensitivity
 struct mouse_pair{
   int x;
@@ -74,9 +75,9 @@ void setup() {
   dmp_ready = 0; //Assume failure
   been_pinched = 0;
   //Serial.begin(9600);
-  pinMode(12,OUTPUT);
-  pinMode(11, INPUT);
-  cap = CapacitiveSensor(11,12); 
+  //pinMode(12,OUTPUT);
+  //pinMode(11, INPUT);
+  //cap = CapacitiveSensor(4,5); 
   Serial.println("Setup complete");
   /* Setup for MPU6050, hopefully it doesn't interfere with the capacitive sensor */
   Wire.begin();
@@ -177,18 +178,17 @@ void send_mouse_event(struct mouse_pair mp){
 
 /* Only returns true if the index finger is pinched */
 bool first_pinched(uint8_t fingers){
-  #define FIRST_FINGER ( 1 << 1 )
+  #define FIRST_FINGER ( 1 << INDEX_PAD )
   //Serial.println(fingers & FIRST_FINGER);
   return ( (fingers & FIRST_FINGER) == FIRST_FINGER );
 }
 
 uint8_t cap_sensor_read(){
-  long v = cap.capacitiveSensor(80); //Sensor resolution probably need to mess with this
-  Serial.println(v);
-  if( v > 100 ) { //Arbitrary number
+  long v = cap.capacitiveSensor(30); //Sensor resolution probably need to mess with this
+  //Serial.println(v);
+  if( v > CAP_SENSE ) { //Arbitrary number
     return ( 1 << 0 );
   }
-  delay(100);
   return (0);
 }
 
