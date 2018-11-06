@@ -1,7 +1,5 @@
 #include <CapacitiveSensor.h>
 
-#include <Kalman.h>
-
 #include <Mouse.h>
 #include "I2Cdev.h"
 //#include "MPU6050.h"
@@ -52,8 +50,7 @@ void setup_ble(void);
 struct mouse_pair mouse_glide(struct mouse_pair);
 
 MPU6050 mpu;
-Kalman kalmanX;
-Kalman kalmanY;
+
 
 bool dmp_ready;
 uint16_t fifoCount;
