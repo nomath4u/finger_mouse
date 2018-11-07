@@ -16,8 +16,9 @@
  *  Use the IRQ on the capacitive sensor in order to wake up the arduino.
  *  Make sure the bluetooth connection stays alive.
  */
-
-
+#define LED_PIN 13
+#define CUTOFF_VOLTAGE 3.7
+#define VBATPIN A9
 #define VAL_TO_G 16384
 #define VAL_TO_DEG 131
 #define G_TO_MSS 9.8
@@ -49,6 +50,7 @@ void set_starting_angles(void);
 void error(const __FlashStringHelper*err);
 void setup_ble(void);
 struct mouse_pair mouse_glide(struct mouse_pair);
+void battery_monitor(void);
 
 MPU6050 mpu;
 
@@ -74,11 +76,8 @@ void setup() {
   uint8_t dev_status;
   dmp_ready = 0; //Assume failure
   been_pinched = 0;
-  //Serial.begin(9600);
-  //pinMode(12,OUTPUT);
-  //pinMode(11, INPUT);
-  //cap = CapacitiveSensor(4,5); 
-  Serial.println("Setup complete");
+
+  pinMode(LED_PIN, OUTPUT); 
   /* Setup for MPU6050, hopefully it doesn't interfere with the capacitive sensor */
   Wire.begin();
   setup_ble();
@@ -117,6 +116,7 @@ void loop() {
         //mp = mouse_glide(mp); //Not working well at the moment
 	been_pinched = 0;
   }
+  battery_monitor();
 }
 
 /* accel is in gs and gyro is in degrees/sec */
@@ -186,7 +186,7 @@ bool first_pinched(uint8_t fingers){
 uint8_t cap_sensor_read(){
   long v = cap.capacitiveSensor(30); //Sensor resolution probably need to mess with this
   //Serial.println(v);
-  if( v > CAP_SENSE ) { //Arbitrary number
+  if( v > CAP_SENSE ) {
     return ( 1 << 0 );
   }
   return (0);
@@ -275,3 +275,26 @@ struct mouse_pair mouse_glide(struct mouse_pair mp){
         ticks++;
         return glide_vals;
 }
+
+/* Shamelessly stolen from adafruit */
+void battery_monitor(void){
+  float measuredvbat = analogRead(VBATPIN);
+  measuredvbat *= 2;    // we divided by 2, so multiply back
+  measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
+  measuredvbat /= 1024; // convert to voltage
+  low_bat_led(is_cutoff(measuredvbat));
+  //Serial.println(measuredvbat);
+}
+
+boolean is_cutoff(float voltage){
+  return( (voltage <= CUTOFF_VOLTAGE) );
+}
+
+void low_bat_led( boolean low_voltage ){
+  if(low_voltage){
+    digitalWrite(LED_PIN, HIGH);
+  } else {
+    digitalWrite(LED_PIN, LOW);
+  }
+}
+
