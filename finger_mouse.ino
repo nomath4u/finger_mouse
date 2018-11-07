@@ -27,7 +27,7 @@
 #define TRUE 1
 #define FACTORYRESET_ENABLE         0
 #define MINIMUM_FIRMWARE_VERSION    "0.6.6"
-#define CAP_SENSE 12 //Chosen for battery usage. When grounded to mains this is not a good value
+#define CAP_SENSE 50 //Chosen for battery usage. When grounded to mains this is not a good value
  //Trying to be like 1/2at^2 constant must always be negative but can be varied for sensitivity
 struct mouse_pair{
   int x;
@@ -186,6 +186,8 @@ bool first_pinched(uint8_t fingers){
 uint8_t cap_sensor_read(){
   long v = cap.capacitiveSensor(30); //Sensor resolution probably need to mess with this
   //Serial.println(v);
+  //ble.print(F("AT+BLEUARTTX="));
+  //ble.print(v);ble.println("\\r\\n");
   if( v > CAP_SENSE ) {
     return ( 1 << 0 );
   }
